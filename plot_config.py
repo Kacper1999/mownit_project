@@ -22,10 +22,11 @@ class Plot:
         prev_p = self.m.get_p(self.prev_ind)
         p = self.m.get_p(ind)
         if not self.m.add_connection(prev_p, p):  # add_connection returns False when connection already exists
-            return
+            return False
         x = [p.x(), prev_p.x()]
         y = [p.y(), prev_p.y()]
         self.ax.plot(x, y, "r")
+        return True
 
     def add_point(self, event):
         x, y = event.xdata, event.ydata
@@ -36,8 +37,8 @@ class Plot:
         if self.line.contains(event)[0]:
             ind = self.line.contains(event)[1]["ind"][0]
             if self.prev_ind is not None:
-                self.add_line(ind)
-                self.prev_ind = None
+                if self.add_line(ind):
+                    self.prev_ind = None
             else:
                 self.prev_ind = ind
         else:
