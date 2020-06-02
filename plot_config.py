@@ -1,49 +1,58 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from tsp import Map
+from tsp import ConnectedGraph, TspSimAnn
+from matplotlib.animation import FuncAnimation
+import time
+
+
+def update_line(line, new_x, new_y):
+    line.set_xdata(np.append(line.get_xdata(), new_x))
+    line.set_ydata(np.append(line.get_ydata(), new_y))
 
 
 class Plot:
     def __init__(self):
-        self.m = Map(0)
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, autoscale_on=False)
-        self.line, = self.ax.plot([], [], "o", picker=5)
-
-        self.prev_ind = None  # prev point to draw line
+        self.line, = self.ax.plot([], [], "o")
 
         self.fig.canvas.mpl_connect('button_press_event', self.on_click)
 
-    def update_line(self, new_x, new_y):
-        self.line.set_xdata(np.append(self.line.get_xdata(), new_x))
-        self.line.set_ydata(np.append(self.line.get_ydata(), new_y))
-
-    def add_line(self, ind):
-        prev_p = self.m.get_p(self.prev_ind)
-        p = self.m.get_p(ind)
-        if not self.m.add_connection(prev_p, p):  # add_connection returns False when connection already exists
-            return False
-        x = [p.x(), prev_p.x()]
-        y = [p.y(), prev_p.y()]
-        self.ax.plot(x, y, "r")
-        return True
-
     def add_point(self, event):
         x, y = event.xdata, event.ydata
-        self.update_line([x], [y])
-        self.m.add_point((x, y))
+        update_line(self.line, [x], [y])
 
     def on_click(self, event):
         if self.line.contains(event)[0]:
-            ind = self.line.contains(event)[1]["ind"][0]
-            if self.prev_ind is not None:
-                if self.add_line(ind):
-                    self.prev_ind = None
-            else:
-                self.prev_ind = ind
-        else:
-            self.add_point(event)
-            self.prev_ind = None
+            return
+        self.add_point(event)
+        self.fig.canvas.draw()
+
+    def clear(self):
+        self.fig.clf()
+        self.ax = self.fig.add_subplot(111, autoscale_on=False)
+        self.fig.add_subplot(self.ax)
+        self.line, = self.ax.plot([], [], "o")
+        self.fig.canvas.draw()
+
+    def animate(self, steps=200, t=10, alpha=0.95):
+        p_x_coord = self.line.get_xdata().reshape(-1, 1)
+        p_y_coord = self.line.get_ydata().reshape(-1, 1)
+        points_coord = np.append(p_x_coord, p_y_coord, axis=1)
+
+        g = ConnectedGraph(points_coord=points_coord)
+        sim_ann = TspSimAnn(g, t=t, alpha=alpha)
+
+        ln, = self.ax.plot([], [], "r")
+
+        def update(frame):
+            sim_ann.step()
+            cx, cy = sim_ann.get_connections_data()
+            ln.set_data(cx, cy)
+            self.ax.legend([], title=f"Step: {frame + 1}", frameon=False)
+            return ln,
+
+        ani = FuncAnimation(self.fig, update, save_count=1, frames=steps, repeat=False, interval=20)
         self.fig.canvas.draw()
 
 
@@ -55,10 +64,7 @@ def main():
     # line, = ax.plot(np.random.rand(100), 'o', picker=5)  # 5 points tolerance
     # update_line(line, [0, 10], [0, 0.1])
     # fig.canvas.draw()
-
     plt.show()
-
-    print(p.m.is_connected())
 
 
 if __name__ == '__main__':

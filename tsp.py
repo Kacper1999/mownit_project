@@ -1,15 +1,17 @@
 import numpy as np
 import random
 import matplotlib.pyplot as plt
-
+import math
 from typing import Set, Tuple, List
+import time
+from matplotlib.animation import FuncAnimation
 
 
 class Point:
-    def __init__(self, i, coord=None):
+    def __init__(self, i, points_num, coord=None):
         self.i = i
+        self.points_num = points_num
         self.coord = (random.random(), random.random()) if coord is None else coord
-        self.connections = set()
 
     def x(self):
         return self.coord[0]
@@ -17,38 +19,32 @@ class Point:
     def y(self):
         return self.coord[1]
 
-    def add_connection(self, to):
-        self.connections.add(to)
+    def dist(self, p):  # not euclidean distance
+        return np.sum([(i - j) ** 2 for i, j in zip(p.coord, self.coord)])
 
     def __str__(self):
-        return str(self.coord)
+        return f"Point {self.i}: {self.coord}"
 
 
-class Map:
-    def __init__(self, points_num, connections_num=None):
-        self.points_coord = random_points(points_num)
-        self.points: List[Point] = [Point(i, coord) for i, coord in enumerate(self.points_coord)]
+class ConnectedGraph:
+    def __init__(self, points_coord=None, points_num=0):
+        if points_coord is None:
+            self.points_coord = random_points(points_num)
+        else:
+            points_num = len(points_coord)
+            self.points_coord = points_coord
+        self.points: List[Point] = [Point(i, points_num, coord) for i, coord in enumerate(self.points_coord)]
         self.points_num = points_num
-        self.connections: Set[Tuple[Point, Point]] = set()
-        if connections_num is not None:
-            self.add_random_connections(connections_num)
+        self.distances = np.array([[p1.dist(p2) for p2 in self.points] for p1 in self.points])
 
     def add_point(self, coord: tuple):
-        self.points.append(Point(self.points_num, coord))
+        self.points.append(Point(self.points_num, self.points_num, coord))
         self.points_coord = np.vstack((self.points_coord, coord))
+        for p in self.points:
+            print(p.points_num)
+            p.points_num += 1
         self.points_num += 1
-
-    def can_add_connection(self, p1: Point, p2: Point):
-        return not (p1 == p2 or (p1, p2) in self.connections or (p2, p1) in self.connections)
-
-    def add_connection(self, p1: Point, p2: Point):
-        if not self.can_add_connection(p1, p2):
-            print("Connection already exists or trying to connect to itself")
-            return False
-        p1.add_connection(p2)
-        p2.add_connection(p1)
-        self.connections.add((p1, p2))
-        return True
+        self.distances = np.array([[p1.dist(p2) for p2 in self.points] for p1 in self.points])
 
     def rand_p(self):
         return self.points[random.randint(0, self.points_num - 1)]
@@ -56,41 +52,67 @@ class Map:
     def get_p(self, ind):
         return self.points[ind]
 
-    def get_new_connection(self):
-        p1, p2 = self.rand_p(), self.rand_p()
-        while not self.can_add_connection(p1, p2):
-            p1, p2 = self.rand_p(), self.rand_p()
-        return p1, p2
-
-    def add_random_connections(self, connections_num):
-        for _ in range(connections_num):
-            p1, p2 = self.get_new_connection()
-            self.add_connection(p1, p2)
-
-    def show_map(self):
+    def show_graph(self):
         px = self.points_coord.T[0]
         py = self.points_coord.T[1]
         plt.scatter(px, py)
-        for connection in self.connections:
-            cx = [point.x() for point in connection]
-            cy = [point.y() for point in connection]
-            plt.plot(cx, cy, "r")
         plt.show()
 
-    def is_connected(self):
-        return sum(1 for _ in self.bfs()) == self.points_num
 
-    def bfs(self):
-        visited = np.full(self.points_num, False, dtype=bool)
-        q = [self.points[0]]
-        visited[0] = True
-        while q:
-            point = q.pop(0)
-            yield point
-            for c in point.connections:
-                if not visited[c.i]:
-                    visited[c.i] = True
-                    q.append(c)
+class TspSimAnn:
+    def __init__(self, g: ConnectedGraph, t=10, alpha=0.99):
+        self.g = g
+        self.points_num = g.points_num
+        self.path = np.arange(g.points_num, dtype=int)
+        self.curr_path_w = self.get_path_w(self.path)
+        self.t = t
+        self.alpha = alpha
+        self.switch_prob = 1
+
+    def animate(self):
+        pass
+
+    def step(self):
+        p1, p2 = random.randint(0, self.points_num - 1), random.randint(0, self.points_num - 1)
+        self.path[p1], self.path[p2] = self.path[p2], self.path[p1]
+        new_w = self.get_path_w(self.path)
+
+        self.switch_prob = self.prob_of_switch(new_w)
+        if self.switch_prob > random.random():
+            self.curr_path_w = new_w
+        else:
+            self.path[p1], self.path[p2] = self.path[p2], self.path[p1]
+        self.t *= self.alpha
+
+    def prob_of_switch(self, new_w):
+        if new_w < self.curr_path_w:
+            return 1
+        return math.exp((self.curr_path_w - new_w) / self.t)
+
+    def get_path_w(self, path):
+        w = 0
+        prev_i = path[-1]
+        for i in path:
+            w += self.g.distances[i, prev_i]
+            prev_i = i
+        return w
+
+    def get_connections_data(self):
+        cx = [self.g.points_coord[i][0] for i in self.path]
+        cx.append(self.g.points_coord[self.path[0]][0])
+
+        cy = [self.g.points_coord[i][1] for i in self.path]
+        cy.append(self.g.points_coord[self.path[0]][1])
+        return cx, cy
+
+    def show_path(self):
+        px = self.g.points_coord.T[0]
+        py = self.g.points_coord.T[1]
+        cx, cy = self.get_connections_data()
+
+        plt.scatter(px, py)
+        plt.plot(cx, cy)
+        plt.show()
 
 
 def random_points(points_num):
@@ -99,10 +121,30 @@ def random_points(points_num):
 
 
 def main():
-    p_num = 8
-    m = Map(p_num,  p_num)
-    print(m.is_connected())
-    m.show_map()
+    p_num = 10
+    g = ConnectedGraph(p_num)
+    t = TspSimAnn(g, t=2 * p_num)
+
+    fig, ax = plt.subplots()
+
+    px = t.g.points_coord.T[0]
+    py = t.g.points_coord.T[1]
+
+    plt.scatter(px, py)
+    ln, = plt.plot([], [])
+
+    def update(frame):
+        cx, cy = t.get_connections_data()
+        ln.set_data(cx, cy)
+        t.step()
+        return ln,
+
+    steps = 1000
+
+    ani = FuncAnimation(fig, update, save_count=1, frames=steps, repeat=False, interval=20)
+    plt.show()
+    # t.show_path()
+    # g.show_graph()
 
 
 if __name__ == '__main__':
