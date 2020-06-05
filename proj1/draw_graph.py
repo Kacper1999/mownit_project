@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from graph import Graph
+from proj1.graph import Graph
 
 
 class Plot:

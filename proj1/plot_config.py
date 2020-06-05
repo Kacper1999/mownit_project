@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from tsp import ConnectedGraph, TspSimAnn
+from proj1.tsp import ConnectedGraph, TspSimAnn
 from matplotlib.animation import FuncAnimation
-import time
 
 
 def update_line(line, new_x, new_y):
